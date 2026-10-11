@@ -25,7 +25,7 @@ const items = [
   },
   {
     label: 'Results',
-    href: '/dashboard/student/quizzes',
+    href: '/dashboard/student/mock-tests/results',
     icon: Award,
   },
   {
