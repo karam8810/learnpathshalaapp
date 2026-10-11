@@ -249,23 +249,60 @@ export default function TeacherLiveClassesPage() {
   // START LIVE
   // ============================================================
 
-  const handleStartLive = async (id: string) => {
-    if (!user) return;
 
-    const { error } = await supabase
-      .from('live_classes')
-      .update({ status: 'live' })
-      .eq('id', id)
-      .eq('teacher_id', user.id);
+const handleStartLive = async (id: string) => {
+  if (!user) {
+    toast.error('You are not logged in');
+    return;
+  }
 
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
+  // 1. Mark the class as live.
+  const { data: liveClass, error: updateError } = await supabase
+    .from('live_classes')
+    .update({
+      status: 'live',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('teacher_id', user.id)
+    .eq('status', 'scheduled')
+    .select('id')
+    .maybeSingle();
 
-    toast.success('Class is now live!');
+  if (updateError) {
+    toast.error(updateError.message);
+    return;
+  }
+
+  if (!liveClass) {
+    toast.error(
+      'Class was not updated. It may already be live or you may not have access.'
+    );
     await fetchClasses();
-  };
+    return;
+  }
+
+  // 2. Create notification records for enrolled students.
+  const { data: notificationResult, error: notificationError } =
+    await supabase.rpc('notify_live_class_started', {
+      p_live_class_id: id,
+    });
+
+  if (notificationError) {
+    console.error('Live notification error:', notificationError);
+    toast.error(
+      'Class is live, but student notifications could not be created.'
+    );
+    await fetchClasses();
+    return;
+  }
+
+  console.log('Live notification result:', notificationResult);
+
+  toast.success('Class is live! Student notifications created.');
+  await fetchClasses();
+};
+
 
   // ============================================================
   // END LIVE DIALOG
