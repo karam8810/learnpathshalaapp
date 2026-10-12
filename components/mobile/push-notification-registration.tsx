@@ -17,20 +17,30 @@ export default function PushNotificationRegistration() {
     if (!user?.id || !Capacitor.isNativePlatform()) return;
 
     let active = true;
-    let registering = false;
 
     type PushListener = Awaited<
       ReturnType<typeof PushNotifications.addListener>
     >;
 
-    let listeners: PushListener[] = [];
+    const listeners: PushListener[] = [];
 
     const setup = async () => {
-      if (registering) return;
-      registering = true;
-
       try {
-        // Listen for the FCM token before registering.
+        // Create the Android notification channel.
+        if (Capacitor.getPlatform() === "android") {
+          await PushNotifications.createChannel({
+            id: "learnpathshala_alerts",
+            name: "LearnPathshala Alerts",
+            description: "Learning and account notifications",
+            importance: 5,
+            sound: "default",
+            vibration: true,
+          });
+        }
+
+        if (!active) return;
+
+        // Save the Firebase device token in Supabase.
         const registrationListener =
           await PushNotifications.addListener(
             "registration",
@@ -72,6 +82,7 @@ export default function PushNotificationRegistration() {
 
         listeners.push(errorListener);
 
+        // Runs when a notification arrives while the app is open.
         const receivedListener =
           await PushNotifications.addListener(
             "pushNotificationReceived",
@@ -85,6 +96,7 @@ export default function PushNotificationRegistration() {
 
         listeners.push(receivedListener);
 
+        // Runs when the student taps a notification.
         const actionListener =
           await PushNotifications.addListener(
             "pushNotificationActionPerformed",
@@ -93,15 +105,34 @@ export default function PushNotificationRegistration() {
 
               const url = action.notification.data?.url;
 
+              // Always send live-class notifications to the
+              // student live-classes listing.
+              if (
+                typeof url === "string" &&
+                (
+                  url.includes("/live-class/") ||
+                  url.includes("/dashboard/student/live-classes")
+                )
+              ) {
+                window.location.href =
+                  "/dashboard/student/live-classes";
+                return;
+              }
+
+              // Accept safe relative URLs only.
               if (
                 typeof url === "string" &&
                 url.startsWith("/") &&
-                !url.startsWith("//")
+                !url.startsWith("//") &&
+                !url.includes("\\")
               ) {
                 window.location.href = url;
-              } else {
-                window.location.href = "/dashboard/student";
+                return;
               }
+
+              // Safe fallback for missing or invalid URLs.
+              window.location.href =
+                "/dashboard/student/live-classes";
             }
           );
 
@@ -109,13 +140,12 @@ export default function PushNotificationRegistration() {
 
         if (!active) return;
 
-        // Check the existing Android permission first.
+        // Check notification permission.
         let permission =
           await PushNotifications.checkPermissions();
 
         if (!active) return;
 
-        // Request permission if it hasn't been granted.
         if (permission.receive !== "granted") {
           permission =
             await PushNotifications.requestPermissions();
@@ -126,7 +156,7 @@ export default function PushNotificationRegistration() {
         if (permission.receive !== "granted") {
           console.warn(
             "Notification permission was not granted. " +
-            "Enable notifications in Android Settings."
+              "Enable notifications in Android Settings."
           );
           return;
         }
@@ -138,8 +168,6 @@ export default function PushNotificationRegistration() {
           "Push notification setup failed:",
           error
         );
-      } finally {
-        registering = false;
       }
     };
 
@@ -151,8 +179,6 @@ export default function PushNotificationRegistration() {
       for (const listener of listeners) {
         void listener.remove();
       }
-
-      listeners = [];
     };
   }, [user?.id]);
 
