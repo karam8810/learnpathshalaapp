@@ -144,13 +144,14 @@ export default function PreviousYearPapersPage() {
      PUBLIC PDF URL
   ======================================================= */
 
-  function getPdfUrl(filePath: string) {
-    const { data } = supabase.storage
-      .from("previous-year-papers")
-      .getPublicUrl(filePath);
+function getPdfUrl(filePath: string) {
+  const encodedPath = filePath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
 
-    return data.publicUrl;
-  }
+  return `/api/previous-year-papers/${encodedPath}`;
+}
 
   /* =======================================================
      FILTER VALUES
@@ -409,9 +410,38 @@ export default function PreviousYearPapersPage() {
          GET PDF URL
       ----------------------------------------------------- */
 
-      const pdfUrl = getPdfUrl(
-        selectedPaper.file_path
-      );
+      // GET SECURE PDF URL
+const pdfUrl = getPdfUrl(selectedPaper.file_path);
+const action = pendingAction;
+const fileName = selectedPaper.file_name;
+
+// CLOSE MODAL
+setShowAccessModal(false);
+setSelectedPaper(null);
+setPendingAction(null);
+setAccessName("");
+setAccessPhone("");
+setAccessError("");
+
+// VIEW PDF
+if (action === "view") {
+  window.open(pdfUrl, "_blank", "noopener,noreferrer");
+  return;
+}
+
+// DOWNLOAD PDF
+if (action === "download") {
+  const link = document.createElement("a");
+
+  link.href = `${pdfUrl}?download=1`;
+  link.download = fileName;
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  return;
+}
 
       /* -----------------------------------------------------
          CLOSE MODAL
