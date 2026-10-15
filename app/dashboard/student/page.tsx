@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import Link from "next/link";
-
+import GlobalSearch from "@/components/student/global-search";
 import {
   Loader2,
   BookOpen,
@@ -304,16 +304,16 @@ export default function StudentOverviewPage() {
 
         const avgScore = recent.length
           ? Math.round(
-              recent.reduce(
-                (total, submission) =>
-                  total +
-                  (submission.total_points > 0
-                    ? (submission.score / submission.total_points) * 100
-                    : 0),
+            recent.reduce(
+              (total, submission) =>
+                total +
+                (submission.total_points > 0
+                  ? (submission.score / submission.total_points) * 100
+                  : 0),
 
-                0,
-              ) / recent.length,
-            )
+              0,
+            ) / recent.length,
+          )
           : 0;
 
         if (cancelled) return;
@@ -401,7 +401,7 @@ export default function StudentOverviewPage() {
 
   return (
     <DashboardShell role="student">
-      <PushNotificationRegistration/>
+      <PushNotificationRegistration />
       {/* Mobile app-style home. Header and bottom navigation belong to DashboardShell. */}
 
       <div className="-mx-4 -mt-6 min-h-screen bg-white pb-8 md:hidden">
@@ -434,9 +434,8 @@ export default function StudentOverviewPage() {
               <div className="relative">
                 <button
                   type="button"
-                  aria-label={`Notifications${
-                    unreadCount ? `, ${unreadCount} unread` : ""
-                  }`}
+                  aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""
+                    }`}
                   aria-expanded={notificationOpen}
                   onClick={() => setNotificationOpen((value) => !value)}
                   className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10"
@@ -488,9 +487,8 @@ export default function StudentOverviewPage() {
                                 onClick={() =>
                                   void handleNotificationClick(item)
                                 }
-                                className={`flex w-full gap-3 border-b border-slate-100 p-4 text-left hover:bg-slate-50 ${
-                                  !item.is_read ? "bg-blue-50" : ""
-                                }`}
+                                className={`flex w-full gap-3 border-b border-slate-100 p-4 text-left hover:bg-slate-50 ${!item.is_read ? "bg-blue-50" : ""
+                                  }`}
                               >
                                 <span className="min-w-0 flex-1">
                                   <span className="block text-sm font-semibold">
@@ -537,14 +535,11 @@ export default function StudentOverviewPage() {
               router.push("/dashboard/student/mock-tests");
             }}
           >
-            <Search size={19} className="shrink-0" />
+            {/* <Search size={19} className="shrink-0" /> */}
 
-            <input
-              type="search"
-              aria-label="Search courses and mock tests"
-              placeholder="Search courses, mock tests..."
-              className="w-full min-w-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
-            />
+        <div className="mb-6 max-w-2xl">
+  <GlobalSearch />
+</div>
           </form>
         </header>
 
@@ -889,8 +884,8 @@ export default function StudentOverviewPage() {
                   const score =
                     submission.total_points > 0
                       ? Math.round(
-                          (submission.score / submission.total_points) * 100,
-                        )
+                        (submission.score / submission.total_points) * 100,
+                      )
                       : 0;
 
                   return (
@@ -925,6 +920,9 @@ export default function StudentOverviewPage() {
       {/* Desktop dashboard remains separate and unchanged in layout */}
 
       <div className="hidden md:block">
+         <div className="mb-6 max-w-2xl">
+    <GlobalSearch />
+  </div>
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-slate-900">
             Welcome back, {firstName}!
@@ -1045,8 +1043,8 @@ export default function StudentOverviewPage() {
                     const score =
                       submission.total_points > 0
                         ? Math.round(
-                            (submission.score / submission.total_points) * 100,
-                          )
+                          (submission.score / submission.total_points) * 100,
+                        )
                         : 0;
 
                     return (
@@ -1055,16 +1053,14 @@ export default function StudentOverviewPage() {
                         className="flex items-center gap-3 rounded-lg border border-slate-100 p-3"
                       >
                         <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                            score >= 70 ? "bg-emerald-100" : "bg-amber-100"
-                          }`}
+                          className={`flex h-10 w-10 items-center justify-center rounded-lg ${score >= 70 ? "bg-emerald-100" : "bg-amber-100"
+                            }`}
                         >
                           <Award
-                            className={`h-5 w-5 ${
-                              score >= 70
+                            className={`h-5 w-5 ${score >= 70
                                 ? "text-emerald-600"
                                 : "text-amber-600"
-                            }`}
+                              }`}
                           />
                         </div>
 

@@ -1,21 +1,23 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-
+import { notFound } from "next/navigation";
 import {
   ArrowLeft,
+  ArrowRight,
+  BookOpen,
   CalendarDays,
   Clock,
-  BookOpen,
   Tag,
-  ArrowRight,
 } from "lucide-react";
-
-import { notFound } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 
+const SITE_URL = "https://learnpathshala.com";
+const SITE_NAME = "LearnPathshala";
+
 type PageProps = {
+  // Next.js 13.5 App Router uses synchronous params.
   params: {
     slug: string;
   };
@@ -45,57 +47,62 @@ type BlogPost = {
   slug: string;
   excerpt: string | null;
   content: string;
-
   featured_image: string | null;
   featured_image_alt: string | null;
-
   published_at: string | null;
   updated_at: string | null;
   reading_time: number | null;
-
   meta_title: string | null;
   meta_description: string | null;
   focus_keyword: string | null;
   canonical_url: string | null;
-
   og_title: string | null;
   og_description: string | null;
   og_image: string | null;
-
   twitter_title: string | null;
   twitter_description: string | null;
   twitter_image: string | null;
-
-  robots_index: boolean;
-  robots_follow: boolean;
-
+  robots_index: boolean | null;
+  robots_follow: boolean | null;
   schema_type: string | null;
-
-  category:
-    | BlogCategory
-    | BlogCategory[]
-    | null;
-
-  author:
-    | BlogAuthor
-    | BlogAuthor[]
-    | null;
-
+  category: BlogCategory | BlogCategory[] | null;
+  author: BlogAuthor | BlogAuthor[] | null;
   blog_post_tags: Array<{
-    tag:
-      | BlogTag
-      | BlogTag[]
-      | null;
-  }>;
+    tag: BlogTag | BlogTag[] | null;
+  }> | null;
 };
 
-/* ============================================================
-   GET BLOG BY SLUG
-============================================================ */
+function absoluteUrl(value: string | null | undefined): string | undefined {
+  if (!value?.trim()) return undefined;
 
-async function getPost(
-  slug: string
-): Promise<BlogPost | null> {
+  try {
+    return new URL(value, SITE_URL).toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function getCanonical(post: BlogPost): string {
+  // Respect an explicitly configured canonical URL; otherwise use this site's route.
+  return absoluteUrl(post.canonical_url) ??
+    `${SITE_URL}/blog/${encodeURIComponent(post.slug)}`;
+}
+
+function getRelation<T>(relation: T | T[] | null | undefined): T | null {
+  if (!relation) return null;
+  return Array.isArray(relation) ? relation[0] ?? null : relation;
+}
+
+function getPlainDescription(post: BlogPost): string {
+  const value = post.meta_description || post.excerpt || `Read ${post.title} on ${SITE_NAME}.`;
+  return value.replace(/\s+/g, " ").trim().slice(0, 300);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Fetch a published blog post                                                */
+/* -------------------------------------------------------------------------- */
+
+async function getPost(slug: string): Promise<BlogPost | null> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -106,44 +113,34 @@ async function getPost(
       slug,
       excerpt,
       content,
-
       featured_image,
       featured_image_alt,
-
       published_at,
       updated_at,
       reading_time,
-
       meta_title,
       meta_description,
       focus_keyword,
       canonical_url,
-
       og_title,
       og_description,
       og_image,
-
       twitter_title,
       twitter_description,
       twitter_image,
-
       robots_index,
       robots_follow,
-
       schema_type,
-
       category:blog_categories(
         id,
         name,
         slug
       ),
-
       author:profiles(
         id,
         full_name,
         avatar_url
       ),
-
       blog_post_tags(
         tag:blog_tags(
           id,
@@ -157,295 +154,184 @@ async function getPost(
     .maybeSingle();
 
   if (error) {
-    console.error(
-      "Blog detail error:",
-      error
-    );
-
+    console.error("Blog detail query failed:", error.message);
     return null;
   }
 
-  return data as unknown as BlogPost;
+  return (data as unknown as BlogPost | null) ?? null;
 }
 
-/* ============================================================
-   SEO
-============================================================ */
+/* -------------------------------------------------------------------------- */
+/* Dynamic SEO metadata                                                       */
+/* -------------------------------------------------------------------------- */
 
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
-  const post = await getPost(
-    params.slug
-  );
+  const post = await getPost(params.slug);
 
   if (!post) {
     return {
-      title:
-        "Blog Not Found | LearnPathshala",
-      description:
-        "The requested LearnPathshala blog article was not found.",
+      title: `Blog Not Found | ${SITE_NAME}`,
+      description: "The requested blog article could not be found.",
+      robots: {
+        index: false,
+        follow: false,
+        googleBot: {
+          index: false,
+          follow: false,
+        },
+      },
     };
   }
 
-  const title =
-    post.meta_title ||
-    post.title;
-
-  const description =
-    post.meta_description ||
-    post.excerpt ||
-    `Read ${post.title} on LearnPathshala.`;
-
-  const image =
-    post.og_image ||
-    post.featured_image ||
-    undefined;
-
-  const canonical =
-    post.canonical_url ||
-    `https://learnpathshala.com/blog/${post.slug}`;
+  const title = post.meta_title?.trim() || `${post.title} | ${SITE_NAME}`;
+  const description = getPlainDescription(post);
+  const canonical = getCanonical(post);
+  const image = absoluteUrl(
+    post.og_image || post.twitter_image || post.featured_image,
+  );
 
   return {
     title,
-
     description,
-
-    keywords: post.focus_keyword
-      ? [post.focus_keyword]
-      : undefined,
-
+    ...(post.focus_keyword
+      ? { keywords: [post.focus_keyword] }
+      : {}),
     alternates: {
       canonical,
     },
-
     robots: {
-      index:
-        post.robots_index ?? true,
-
-      follow:
-        post.robots_follow ?? true,
+      index: post.robots_index ?? true,
+      follow: post.robots_follow ?? true,
+      googleBot: {
+        index: post.robots_index ?? true,
+        follow: post.robots_follow ?? true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
     },
-
     openGraph: {
-      title:
-        post.og_title ||
-        title,
-
-      description:
-        post.og_description ||
-        description,
-
+      title: post.og_title?.trim() || title,
+      description: post.og_description?.trim() || description,
       url: canonical,
-
+      siteName: SITE_NAME,
+      locale: "en_IN",
       type: "article",
-
-      publishedTime:
-        post.published_at ||
-        undefined,
-
-      modifiedTime:
-        post.updated_at ||
-        undefined,
-
-      images: image
-        ? [
-            {
-              url: image,
-              width: 1200,
-              height: 630,
-              alt:
-                post.featured_image_alt ||
-                post.title,
-            },
-          ]
-        : undefined,
+      ...(post.published_at ? { publishedTime: post.published_at } : {}),
+      ...(post.updated_at ? { modifiedTime: post.updated_at } : {}),
+      ...(image
+        ? {
+            images: [
+              {
+                url: image,
+                width: 1200,
+                height: 630,
+                alt: post.featured_image_alt || post.title,
+              },
+            ],
+          }
+        : {}),
     },
-
     twitter: {
-      card: image
-        ? "summary_large_image"
-        : "summary",
-
-      title:
-        post.twitter_title ||
-        title,
-
+      card: image ? "summary_large_image" : "summary",
+      title: post.twitter_title?.trim() || post.og_title?.trim() || title,
       description:
-        post.twitter_description ||
+        post.twitter_description?.trim() ||
+        post.og_description?.trim() ||
         description,
-
-      images: image
-        ? [image]
-        : undefined,
+      ...(image ? { images: [absoluteUrl(post.twitter_image) || image] } : {}),
     },
   };
 }
 
-/* ============================================================
-   PAGE
-============================================================ */
+/* -------------------------------------------------------------------------- */
+/* Blog detail page                                                           */
+/* -------------------------------------------------------------------------- */
 
-export default async function BlogDetailPage({
-  params,
-}: PageProps) {
-  const post = await getPost(
-    params.slug
-  );
+export default async function BlogDetailPage({ params }: PageProps) {
+  const post = await getPost(params.slug);
 
   if (!post) {
     notFound();
   }
 
-  const category =
-    Array.isArray(post.category)
-      ? post.category[0]
-      : post.category;
+  const category = getRelation(post.category);
+  const author = getRelation(post.author);
 
-  const author =
-    Array.isArray(post.author)
-      ? post.author[0]
-      : post.author;
+  const tags = (post.blog_post_tags ?? [])
+    .map((item) => getRelation(item.tag))
+    .filter((tag): tag is BlogTag => Boolean(tag));
 
-  const tags =
-    post.blog_post_tags
-      ?.map((item) => {
-        if (!item.tag) {
-          return null;
-        }
+  const canonical = getCanonical(post);
+  const description = getPlainDescription(post);
+  const featuredImage = absoluteUrl(post.featured_image);
+  const publishedDate = post.published_at
+    ? new Date(post.published_at)
+    : null;
+  const modifiedDate = post.updated_at || post.published_at || null;
 
-        return Array.isArray(item.tag)
-          ? item.tag[0]
-          : item.tag;
-      })
-      .filter(
-        (
-          tag
-        ): tag is BlogTag =>
-          Boolean(tag)
-      ) || [];
-
-  const canonical =
-    post.canonical_url ||
-    `https://learnpathshala.com/blog/${post.slug}`;
-
-  /* ==========================================================
-     STRUCTURED DATA
-  ========================================================== */
-
+  const schemaType = post.schema_type || "Article";
   const articleSchema = {
-    "@context":
-      "https://schema.org",
-
-    "@type":
-      post.schema_type ||
-      "Article",
-
-    headline:
-      post.title,
-
-    description:
-      post.meta_description ||
-      post.excerpt ||
-      "",
-
-    image:
-      post.featured_image
-        ? [post.featured_image]
-        : undefined,
-
-    datePublished:
-      post.published_at ||
-      undefined,
-
-    dateModified:
-      post.updated_at ||
-      post.published_at ||
-      undefined,
-
+    "@context": "https://schema.org",
+    "@type": schemaType,
+    headline: post.title,
+    description,
+    ...(featuredImage ? { image: [featuredImage] } : {}),
+    ...(post.published_at ? { datePublished: post.published_at } : {}),
+    ...(modifiedDate ? { dateModified: modifiedDate } : {}),
     mainEntityOfPage: {
       "@type": "WebPage",
       "@id": canonical,
     },
-
     author: {
-      "@type": "Person",
-
-      name:
-        author?.full_name ||
-        "LearnPathshala",
+      "@type": author?.full_name ? "Person" : "Organization",
+      name: author?.full_name || SITE_NAME,
+      ...(author?.avatar_url
+        ? { image: absoluteUrl(author.avatar_url) }
+        : {}),
     },
-
     publisher: {
-      "@type":
-        "Organization",
-
-      name:
-        "LearnPathshala",
-
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: SITE_URL,
       logo: {
-        "@type":
-          "ImageObject",
-
-        url:
-          "https://learnpathshala.com/logo.png",
+        "@type": "ImageObject",
+        url: `${SITE_URL}/logo.png`,
       },
     },
-
-    articleSection:
-      category?.name ||
-      undefined,
-
-    keywords:
-      post.focus_keyword ||
-      undefined,
+    ...(category?.name ? { articleSection: category.name } : {}),
+    ...(post.focus_keyword ? { keywords: post.focus_keyword } : {}),
   };
+
+  // Escape "<" to prevent a content string from closing the script element.
+  const safeArticleSchema = JSON.stringify(articleSchema).replace(/</g, "\\u003c");
 
   return (
     <main className="min-h-screen bg-white">
-
-      {/* JSON-LD */}
-
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html:
-            JSON.stringify(
-              articleSchema
-            ),
-        }}
+        dangerouslySetInnerHTML={{ __html: safeArticleSchema }}
       />
 
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
-
       <article>
-
         <header className="border-b border-slate-200 bg-slate-50">
-
           <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
-
             <Link
               href="/blog"
               className="mb-7 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-[#063B8F]"
             >
-              <ArrowLeft size={16} />
-
+              <ArrowLeft size={16} aria-hidden="true" />
               Back to Blog
             </Link>
 
             {category && (
               <div className="mb-4">
-
                 <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-[#063B8F]">
-
-                  <BookOpen size={14} />
-
+                  <BookOpen size={14} aria-hidden="true" />
                   {category.name}
-
                 </span>
-
               </div>
             )}
 
@@ -460,35 +346,28 @@ export default async function BlogDetailPage({
             )}
 
             <div className="mt-6 flex flex-wrap items-center gap-5 text-sm text-slate-500">
-
-              {post.published_at && (
-                <span className="flex items-center gap-2">
-                  <CalendarDays
-                    size={16}
-                  />
-
-                  {new Date(
-                    post.published_at
-                  ).toLocaleDateString(
-                    "en-IN",
-                    {
-                      day: "2-digit",
-                      month: "long",
-                      year: "numeric",
-                    }
-                  )}
-                </span>
+              {publishedDate && !Number.isNaN(publishedDate.getTime()) && (
+                <time
+                  className="flex items-center gap-2"
+                  dateTime={post.published_at ?? undefined}
+                >
+                  <CalendarDays size={16} aria-hidden="true" />
+                  {publishedDate.toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </time>
               )}
 
-              {post.reading_time && (
+              {post.reading_time && post.reading_time > 0 && (
                 <span className="flex items-center gap-2">
-                  <Clock size={16} />
-
+                  <Clock size={16} aria-hidden="true" />
                   {post.reading_time} min read
                 </span>
               )}
 
-              {author && (
+              {author?.full_name && (
                 <span>
                   By{" "}
                   <strong className="text-slate-700">
@@ -496,137 +375,72 @@ export default async function BlogDetailPage({
                   </strong>
                 </span>
               )}
-
             </div>
-
           </div>
-
         </header>
 
-        {/* ===================================================
-            FEATURED IMAGE
-        =================================================== */}
-
-        {post.featured_image && (
+        {featuredImage && (
           <div className="mx-auto max-w-6xl px-4 pt-10 sm:px-6 lg:px-8">
-
             <div className="relative aspect-[16/8] overflow-hidden rounded-3xl bg-slate-100">
-
               <Image
-                src={
-                  post.featured_image
-                }
-                alt={
-                  post.featured_image_alt ||
-                  post.title
-                }
+                src={featuredImage}
+                alt={post.featured_image_alt?.trim() || post.title}
                 fill
                 priority
                 sizes="(max-width: 1200px) 100vw, 1200px"
                 className="object-cover"
               />
-
             </div>
-
           </div>
         )}
 
-        {/* ===================================================
-            ARTICLE CONTENT
-        =================================================== */}
-
         <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
-
           <div className="text-lg leading-8 text-slate-700">
+            {post.content.split(/\n+/).map((paragraph, index) => {
+              const text = paragraph.trim();
+              if (!text) return null;
 
-            {post.content
-              .split(/\n+/)
-              .map(
-                (
-                  paragraph,
-                  index
-                ) => {
-
-                  const text =
-                    paragraph.trim();
-
-                  if (!text) {
-                    return null;
-                  }
-
-                  return (
-                    <p
-                      key={index}
-                      className="mb-5"
-                    >
-                      {text}
-                    </p>
-                  );
-                }
-              )}
-
+              return (
+                <p key={`${index}-${text.slice(0, 24)}`} className="mb-5">
+                  {text}
+                </p>
+              );
+            })}
           </div>
-
-          {/* =================================================
-              TAGS
-          ================================================= */}
 
           {tags.length > 0 && (
             <div className="mt-12 border-t border-slate-200 pt-7">
-
               <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-700">
-
-                <Tag size={16} />
-
+                <Tag size={16} aria-hidden="true" />
                 Tags
-
               </div>
 
               <div className="flex flex-wrap gap-2">
-
-                {tags.map(
-                  (tag) => (
-                    <span
-                      key={tag.id}
-                      className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"
-                    >
-                      #{tag.name}
-                    </span>
-                  )
-                )}
-
+                {tags.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                  >
+                    #{tag.name}
+                  </span>
+                ))}
               </div>
-
             </div>
           )}
-
         </div>
-
       </article>
 
-      {/* =====================================================
-          FOOTER CTA
-      ===================================================== */}
-
       <section className="border-t border-slate-200 bg-slate-50">
-
         <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
-
           <Link
             href="/blog"
             className="inline-flex items-center gap-2 rounded-xl bg-[#063B8F] px-5 py-3 text-sm font-bold text-white hover:bg-[#052f70]"
           >
             Explore More Articles
-
-            <ArrowRight
-              size={17}
-            />
+            <ArrowRight size={17} aria-hidden="true" />
           </Link>
-
         </div>
-
       </section>
-
     </main>
   );
 }

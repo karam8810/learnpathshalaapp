@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   appName: "LearnPathshala",
   webDir: "public",
   server: {
-    url: "https://learnpathshalaapp.vercel.app/mobileapp/student",
+    url: "https://learnpathshala.com/mobileapp/student",
     cleartext: false,
   },
 };
