@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type PageProps = {
   params: {
@@ -237,9 +239,11 @@ export default async function MockTestSeriesPage({
         time_limit_minutes,
         status
       `)
-      .in('id', testIds)
-      .eq('status', 'published');
+      const uniqueTestIds = Array.from(new Set(testIds));
 
+    // A test explicitly mapped to this published series is included in the
+    // series even if its individual status was later changed. The series
+    // mapping is the source of truth for inclusion.
     tests = (testsData || []) as MockTest[];
   }
 
@@ -641,8 +645,8 @@ export default async function MockTestSeriesPage({
                   {orderedTests.map(
                     ({ mapping, test }, index) => {
                       const preview =
-                        mapping.is_free_preview ||
-                        test.is_free;
+                        test.status === 'published' &&
+                        (mapping.is_free_preview || test.is_free);
 
                       return (
                         <div
@@ -666,10 +670,16 @@ export default async function MockTestSeriesPage({
                                   </span>
                                 )}
 
-                                {!preview && (
+                                {!preview && test.status === 'published' && (
                                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500">
                                     <Lock className="h-3 w-3" />
                                     Premium
+                                  </span>
+                                )}
+
+                                {test.status !== 'published' && (
+                                  <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                                    Not published yet
                                   </span>
                                 )}
                               </div>
