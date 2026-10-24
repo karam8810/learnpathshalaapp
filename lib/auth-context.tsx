@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -31,11 +32,15 @@ const AuthContext = createContext<AuthContextType>({
 
 const REQUEST_TIMEOUT_MS = 10000;
 
-function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
+function withTimeout<T>(
+  promise: PromiseLike<T>,
+  label: string
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      reject(new Error(`${label} timed out after 10 seconds`));
-    }, REQUEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(
+      () => reject(new Error(`${label} timed out after 10 seconds`)),
+      REQUEST_TIMEOUT_MS
+    );
 
     Promise.resolve(promise).then(
       (result) => {
@@ -56,127 +61,176 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    try {
-      const result = await withTimeout(
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", userId)
-          .maybeSingle(),
-        "Profile request"
-      );
+  const mounted = useRef(false);
+  const currentUserId = useRef<string | null>(null);
+  const profileRequests = useRef(
+    new Map<string, Promise<Profile | null>>()
+  );
 
-      if (result.error) {
-        console.error("Profile fetch error:", result.error.message);
-        setProfile(null);
+  const fetchProfile = useCallback(async (userId: string) => {
+    const existingRequest = profileRequests.current.get(userId);
+
+    if (existingRequest) {
+      return existingRequest;
+    }
+
+    const request = (async (): Promise<Profile | null> => {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", userId)
+            .maybeSingle(),
+          "Profile request"
+        );
+
+        if (error) {
+          console.error("[AUTH] Profile fetch error:", error.message);
+          return null;
+        }
+
+        if (!data) {
+          console.warn("[AUTH] No profile found for user:", userId);
+          return null;
+        }
+
+        return data as Profile;
+      } catch (error) {
+        console.error("[AUTH] Profile fetch failed:", error);
         return null;
       }
+    })();
 
-      const nextProfile = result.data as Profile | null;
-      setProfile(nextProfile);
+    profileRequests.current.set(userId, request);
 
-      if (!nextProfile) {
-        console.warn("No profile found for user:", userId);
+    try {
+      const result = await request;
+
+      if (mounted.current && currentUserId.current === userId) {
+        setProfile(result);
       }
 
-      return nextProfile;
-    } catch (error) {
-      console.error("Profile fetch failed:", error);
-      setProfile(null);
-      return null;
+      return result;
+    } finally {
+      if (profileRequests.current.get(userId) === request) {
+        profileRequests.current.delete(userId);
+      }
     }
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     let active = true;
+
+    const applySession = async (nextUser: User | null) => {
+      if (!active) return;
+
+      currentUserId.current = nextUser?.id ?? null;
+      setUser(nextUser);
+
+      if (!nextUser) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        await fetchProfile(nextUser.id);
+      } finally {
+        if (active && currentUserId.current === nextUser.id) {
+          setLoading(false);
+        }
+      }
+    };
 
     const initialize = async () => {
       try {
         console.log("[AUTH] Checking Supabase session");
 
-        const result = await withTimeout(
+        const { data, error } = await withTimeout(
           supabase.auth.getSession(),
           "Session request"
         );
 
-        if (result.error) throw result.error;
+        if (error) throw error;
         if (!active) return;
 
-        const sessionUser = result.data.session?.user ?? null;
-        setUser(sessionUser);
-
-        if (sessionUser) {
-          console.log("[AUTH] Session found; loading profile");
-          await fetchProfile(sessionUser.id);
-        } else {
-          setProfile(null);
-          console.log("[AUTH] No active session");
-        }
+        await applySession(data.session?.user ?? null);
+        console.log("[AUTH] Initialization finished");
       } catch (error) {
         console.error("[AUTH] Initialization failed:", error);
 
         if (active) {
+          currentUserId.current = null;
           setUser(null);
           setProfile(null);
-        }
-      } finally {
-        if (active) {
           setLoading(false);
-          console.log("[AUTH] Initialization finished");
         }
       }
     };
 
-    void initialize();
-
+    // Subscribe before initialization so session changes aren't missed.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active || event === "INITIAL_SESSION") return;
 
-      if (event === "SIGNED_OUT" || !session?.user) {
+      const nextUser = session?.user ?? null;
+
+      if (event === "SIGNED_OUT" || !nextUser) {
+        currentUserId.current = null;
         setUser(null);
         setProfile(null);
         setLoading(false);
         return;
       }
 
-      const nextUser = session.user;
-      setUser(nextUser);
+      // Ignore token refreshes and repeated events for the same user.
+      if (
+        currentUserId.current === nextUser.id &&
+        (event === "TOKEN_REFRESHED" || event === "USER_UPDATED")
+      ) {
+        setUser(nextUser);
+        return;
+      }
 
-      // Run profile fetching after the auth callback completes.
-      Promise.resolve().then(() => {
-        if (active) {
-          void fetchProfile(nextUser.id);
-        }
-      });
+      void applySession(nextUser);
     });
+
+    void initialize();
 
     return () => {
       active = false;
+      mounted.current = false;
       subscription.unsubscribe();
     };
   }, [fetchProfile]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
 
     if (error) {
-      console.error("Sign out failed:", error.message);
+      console.error("[AUTH] Sign out failed:", error.message);
       throw error;
     }
 
+    currentUserId.current = null;
     setUser(null);
     setProfile(null);
-    router.push("/");
-  };
+    setLoading(false);
+    router.replace("/");
+  }, [router]);
 
-  const refreshProfile = async () => {
-    if (user) {
-      await fetchProfile(user.id);
+  const refreshProfile = useCallback(async () => {
+    const userId = currentUserId.current;
+
+    if (userId) {
+      await fetchProfile(userId);
     }
-  };
+  }, [fetchProfile]);
 
   return (
     <AuthContext.Provider

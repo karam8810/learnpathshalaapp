@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   ChevronDown,
@@ -12,16 +12,22 @@ import {
   RefreshCw,
   Trash2,
   Upload,
-} from 'lucide-react';
-import { DashboardShell } from '@/components/dashboard-shell';
-import { useAuth } from '@/lib/auth-context';
-import { supabase } from '@/lib/supabase/client';
-import { toast } from 'sonner';
+} from "lucide-react";
+import { DashboardShell } from "@/components/dashboard-shell";
+import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 type Course = {
   id: string;
   title: string;
   teacher_id: string | null;
+};
+
+type Teacher = {
+  id: string;
+  full_name: string;
+  email: string;
 };
 
 type Subject = {
@@ -55,7 +61,7 @@ type RecordedClass = {
   status: string;
 };
 
-const BUCKET = 'recorded-class-videos';
+const BUCKET = "recorded-class-videos";
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024;
 
 export default function AdminCourseContentPage() {
@@ -63,22 +69,26 @@ export default function AdminCourseContentPage() {
   const { user, profile, loading } = useAuth();
 
   const [courses, setCourses] = useState<Course[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [recordings, setRecordings] = useState<RecordedClass[]>([]);
 
-  const [courseId, setCourseId] = useState('');
-  const [subjectId, setSubjectId] = useState('');
-  const [chapterId, setChapterId] = useState('');
+  const [courseId, setCourseId] = useState("");
+  const [subjectId, setSubjectId] = useState("");
+  const [chapterId, setChapterId] = useState("");
 
-  const [subjectName, setSubjectName] = useState('');
-  const [subjectDescription, setSubjectDescription] = useState('');
-  const [chapterTitle, setChapterTitle] = useState('');
-  const [chapterDescription, setChapterDescription] = useState('');
+  const [subjectName, setSubjectName] = useState("");
+  const [subjectDescription, setSubjectDescription] = useState("");
+  const [chapterTitle, setChapterTitle] = useState("");
+  const [chapterDescription, setChapterDescription] = useState("");
 
-  const [videoTitle, setVideoTitle] = useState('');
-  const [videoDescription, setVideoDescription] = useState('');
+  const [videoTitle, setVideoTitle] = useState("");
+  const [videoDescription, setVideoDescription] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [assignedTeacherId, setAssignedTeacherId] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState("60");
+  const [earningEligible, setEarningEligible] = useState(false);
 
   const [pageLoading, setPageLoading] = useState(true);
   const [savingSubject, setSavingSubject] = useState(false);
@@ -87,53 +97,56 @@ export default function AdminCourseContentPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && (!user || profile?.role !== 'admin')) {
-      router.replace('/login');
+    if (!loading && (!user || profile?.role !== "admin")) {
+      router.replace("/login");
     }
   }, [loading, user, profile, router]);
 
   const fetchData = useCallback(async () => {
-    if (!user || profile?.role !== 'admin') return;
+    if (!user || profile?.role !== "admin") return;
 
     setPageLoading(true);
 
     try {
-      const [
-        coursesResult,
-        subjectsResult,
-        chaptersResult,
-        recordingsResult,
-      ] = await Promise.all([
-        supabase
-          .from('courses')
-          .select('id, title, teacher_id')
-          .order('title'),
+      const [coursesResult, teachersResult, subjectsResult, chaptersResult, recordingsResult] =
+        await Promise.all([
+          supabase
+            .from("courses")
+            .select("id, title, teacher_id")
+            .order("title"),
 
-        supabase
-          .from('course_subjects')
-          .select(
-            'id, course_id, name, description, display_order, is_active'
-          )
-          .order('display_order'),
+          supabase
+            .from("profiles")
+            .select("id, full_name, email")
+            .eq("role", "teacher")
+            .order("full_name"),
 
-        supabase
-          .from('course_chapters')
-          .select(
-            'id, course_id, subject_id, title, description, display_order, is_active'
-          )
-          .order('display_order'),
+          supabase
+            .from("course_subjects")
+            .select(
+              "id, course_id, name, description, display_order, is_active",
+            )
+            .order("display_order"),
 
-        supabase
-          .from('live_classes')
-          .select(
-            'id, course_id, subject_id, chapter_id, title, recording_path, recording_url, created_at, status'
-          )
-          .not('recording_path', 'is', null)
-          .order('created_at', { ascending: false }),
-      ]);
+          supabase
+            .from("course_chapters")
+            .select(
+              "id, course_id, subject_id, title, description, display_order, is_active",
+            )
+            .order("display_order"),
+
+          supabase
+            .from("live_classes")
+            .select(
+              "id, course_id, subject_id, chapter_id, title, recording_path, recording_url, created_at, status",
+            )
+            .not("recording_path", "is", null)
+            .order("created_at", { ascending: false }),
+        ]);
 
       const firstError =
         coursesResult.error ||
+        teachersResult.error ||
         subjectsResult.error ||
         chaptersResult.error ||
         recordingsResult.error;
@@ -141,15 +154,16 @@ export default function AdminCourseContentPage() {
       if (firstError) throw firstError;
 
       setCourses((coursesResult.data || []) as Course[]);
+      setTeachers((teachersResult.data || []) as Teacher[]);
       setSubjects((subjectsResult.data || []) as Subject[]);
       setChapters((chaptersResult.data || []) as Chapter[]);
       setRecordings((recordingsResult.data || []) as RecordedClass[]);
     } catch (error) {
-      console.error('Course content loading error:', error);
+      console.error("Course content loading error:", error);
       toast.error(
         error instanceof Error
           ? error.message
-          : 'Could not load course content.'
+          : "Could not load course content.",
       );
     } finally {
       setPageLoading(false);
@@ -157,42 +171,43 @@ export default function AdminCourseContentPage() {
   }, [user, profile]);
 
   useEffect(() => {
-    if (profile?.role === 'admin') {
+    if (profile?.role === "admin") {
       void fetchData();
     }
   }, [profile, fetchData]);
 
   const filteredSubjects = subjects.filter(
-    (subject) => subject.course_id === courseId
+    (subject) => subject.course_id === courseId,
   );
 
   const filteredChapters = chapters.filter(
     (chapter) =>
-      chapter.course_id === courseId &&
-      chapter.subject_id === subjectId
+      chapter.course_id === courseId && chapter.subject_id === subjectId,
   );
 
   const selectedCourse = courses.find((course) => course.id === courseId);
+  const effectiveTeacherId =
+    assignedTeacherId || selectedCourse?.teacher_id || teachers[0]?.id || "";
 
   const getCourseTitle = (id: string) =>
-    courses.find((course) => course.id === id)?.title || 'Unknown course';
+    courses.find((course) => course.id === id)?.title || "Unknown course";
 
   const getSubjectName = (id: string | null) =>
-    subjects.find((subject) => subject.id === id)?.name || 'Unassigned';
+    subjects.find((subject) => subject.id === id)?.name || "Unassigned";
 
   const getChapterTitle = (id: string | null) =>
-    chapters.find((chapter) => chapter.id === id)?.title || 'Unassigned';
+    chapters.find((chapter) => chapter.id === id)?.title || "Unassigned";
 
   const handleAddSubject = async () => {
     if (!courseId || !subjectName.trim()) {
-      toast.error('Select a course and enter a subject name.');
+      toast.error("Select a course and enter a subject name.");
       return;
     }
 
     setSavingSubject(true);
 
     try {
-      const { error } = await supabase.from('course_subjects').insert({
+      const { error } = await supabase.from("course_subjects").insert({
         course_id: courseId,
         name: subjectName.trim(),
         description: subjectDescription.trim() || null,
@@ -202,15 +217,15 @@ export default function AdminCourseContentPage() {
 
       if (error) throw error;
 
-      toast.success('Subject created successfully.');
-      setSubjectName('');
-      setSubjectDescription('');
+      toast.success("Subject created successfully.");
+      setSubjectName("");
+      setSubjectDescription("");
 
       await fetchData();
     } catch (error) {
-      console.error('Create subject error:', error);
+      console.error("Create subject error:", error);
       toast.error(
-        error instanceof Error ? error.message : 'Could not create subject.'
+        error instanceof Error ? error.message : "Could not create subject.",
       );
     } finally {
       setSavingSubject(false);
@@ -219,14 +234,14 @@ export default function AdminCourseContentPage() {
 
   const handleAddChapter = async () => {
     if (!courseId || !subjectId || !chapterTitle.trim()) {
-      toast.error('Select a course, subject, and enter a chapter title.');
+      toast.error("Select a course, subject, and enter a chapter title.");
       return;
     }
 
     setSavingChapter(true);
 
     try {
-      const { error } = await supabase.from('course_chapters').insert({
+      const { error } = await supabase.from("course_chapters").insert({
         course_id: courseId,
         subject_id: subjectId,
         title: chapterTitle.trim(),
@@ -237,15 +252,15 @@ export default function AdminCourseContentPage() {
 
       if (error) throw error;
 
-      toast.success('Chapter created successfully.');
-      setChapterTitle('');
-      setChapterDescription('');
+      toast.success("Chapter created successfully.");
+      setChapterTitle("");
+      setChapterDescription("");
 
       await fetchData();
     } catch (error) {
-      console.error('Create chapter error:', error);
+      console.error("Create chapter error:", error);
       toast.error(
-        error instanceof Error ? error.message : 'Could not create chapter.'
+        error instanceof Error ? error.message : "Could not create chapter.",
       );
     } finally {
       setSavingChapter(false);
@@ -254,32 +269,43 @@ export default function AdminCourseContentPage() {
 
   const handleUploadVideo = async () => {
     if (!user) {
-      toast.error('Please log in again.');
+      toast.error("Please log in again.");
       return;
     }
 
     if (!courseId || !subjectId || !chapterId) {
-      toast.error('Select a course, subject, and chapter.');
+      toast.error("Select a course, subject, and chapter.");
       return;
     }
 
     if (!videoTitle.trim()) {
-      toast.error('Enter a video title.');
+      toast.error("Enter a video title.");
+      return;
+    }
+
+    if (!effectiveTeacherId || !teachers.some((teacher) => teacher.id === effectiveTeacherId)) {
+      toast.error("Select a valid teacher for this lecture.");
+      return;
+    }
+
+    const parsedDuration = Number(durationMinutes);
+    if (!Number.isInteger(parsedDuration) || parsedDuration <= 0 || parsedDuration > 1440) {
+      toast.error("Duration must be a whole number between 1 and 1440 minutes.");
       return;
     }
 
     if (!videoFile) {
-      toast.error('Choose a video file.');
+      toast.error("Choose a video file.");
       return;
     }
 
-    if (!videoFile.type.startsWith('video/')) {
-      toast.error('Please choose a valid video file.');
+    if (!videoFile.type.startsWith("video/")) {
+      toast.error("Please choose a valid video file.");
       return;
     }
 
     if (videoFile.size > MAX_VIDEO_SIZE) {
-      toast.error('Video must be 500 MB or smaller.');
+      toast.error("Video must be 500 MB or smaller.");
       return;
     }
 
@@ -291,43 +317,43 @@ export default function AdminCourseContentPage() {
     try {
       // Create the recording entry first so the storage path includes its ID.
       const { data: newClass, error: createError } = await supabase
-        .from('live_classes')
+        .from("live_classes")
         .insert({
           course_id: courseId,
           subject_id: subjectId,
           chapter_id: chapterId,
-          teacher_id: selectedCourse?.teacher_id || user.id,
+          teacher_id: effectiveTeacherId,
           title: videoTitle.trim(),
           description: videoDescription.trim() || null,
           start_time: new Date().toISOString(),
-          duration_minutes: 60,
+          duration_minutes: parsedDuration,
           meeting_link: null,
-          status: 'completed',
+          status: "completed",
           recording_url: null,
           recording_path: null,
         })
-        .select('id')
+        .select("id")
         .single();
 
       if (createError) throw createError;
 
       if (!newClass) {
-        throw new Error('Could not create the recording entry.');
+        throw new Error("Could not create the recording entry.");
       }
 
       createdClassId = newClass.id;
 
       // Keep the existing storage path convention for your bucket policies.
-      const extension =
-        videoFile.name.split('.').pop()?.toLowerCase() || 'mp4';
+      const extension = videoFile.name.split(".").pop()?.toLowerCase() || "mp4";
 
-      uploadedPath =
-        `${user.id}/${newClass.id}/${crypto.randomUUID()}.${extension}`;
+      uploadedPath = `${user.id}/${
+        newClass.id
+      }/${crypto.randomUUID()}.${extension}`;
 
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
         .upload(uploadedPath, videoFile, {
-          cacheControl: '3600',
+          cacheControl: "3600",
           contentType: videoFile.type,
           upsert: false,
         });
@@ -335,30 +361,56 @@ export default function AdminCourseContentPage() {
       if (uploadError) throw uploadError;
 
       const { error: updateError } = await supabase
-        .from('live_classes')
+        .from("live_classes")
         .update({
           recording_path: uploadedPath,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', newClass.id);
+        .eq("id", newClass.id);
 
       if (updateError) throw updateError;
 
-      toast.success('Recorded video uploaded successfully.');
+      // Link the same uploaded recording to the teacher revenue-share ledger.
+      // The course_lectures row is what the contribution summary reads.
+      const { error: lectureError } = await supabase
+        .from("course_lectures")
+        .insert({
+          course_id: courseId,
+          teacher_id: effectiveTeacherId,
+          subject_id: subjectId,
+          chapter_id: chapterId,
+          title: videoTitle.trim(),
+          duration_minutes: parsedDuration,
+          lecture_type: "recorded",
+          status: "published",
+          is_earning_eligible: earningEligible,
+          recording_path: uploadedPath,
+          recording_url: null,
+        });
 
-      setVideoTitle('');
-      setVideoDescription('');
+      if (lectureError) throw lectureError;
+
+      toast.success(
+        earningEligible
+          ? "Recording uploaded and included in eligible lecture tracking."
+          : "Recording uploaded. It is excluded from teacher revenue sharing."
+      );
+
+      setVideoTitle("");
+      setVideoDescription("");
       setVideoFile(null);
+      setDurationMinutes("60");
+      setEarningEligible(false);
 
       const fileInput = document.getElementById(
-        'recorded-video-file'
+        "recorded-video-file",
       ) as HTMLInputElement | null;
 
-      if (fileInput) fileInput.value = '';
+      if (fileInput) fileInput.value = "";
 
       await fetchData();
     } catch (error) {
-      console.error('Video upload error:', error);
+      console.error("Video upload error:", error);
 
       // Roll back the uploaded file and entry if attaching the recording failed.
       if (uploadedPath) {
@@ -366,14 +418,11 @@ export default function AdminCourseContentPage() {
       }
 
       if (createdClassId) {
-        await supabase
-          .from('live_classes')
-          .delete()
-          .eq('id', createdClassId);
+        await supabase.from("live_classes").delete().eq("id", createdClassId);
       }
 
       toast.error(
-        error instanceof Error ? error.message : 'Could not upload video.'
+        error instanceof Error ? error.message : "Could not upload video.",
       );
     } finally {
       setUploading(false);
@@ -382,7 +431,7 @@ export default function AdminCourseContentPage() {
 
   const handleDeleteRecording = async (recording: RecordedClass) => {
     const confirmed = window.confirm(
-      `Delete the recording entry "${recording.title}"? This also removes its uploaded video.`
+      `Delete the recording entry "${recording.title}"? This also removes its uploaded video.`,
     );
 
     if (!confirmed) return;
@@ -390,7 +439,16 @@ export default function AdminCourseContentPage() {
     setDeletingId(recording.id);
 
     try {
+      // Remove the revenue-sharing row linked to this exact storage object first.
       if (recording.recording_path) {
+        const { error: lectureDeleteError } = await supabase
+          .from("course_lectures")
+          .delete()
+          .eq("course_id", recording.course_id)
+          .eq("recording_path", recording.recording_path);
+
+        if (lectureDeleteError) throw lectureDeleteError;
+
         const { error: storageError } = await supabase.storage
           .from(BUCKET)
           .remove([recording.recording_path]);
@@ -399,25 +457,25 @@ export default function AdminCourseContentPage() {
       }
 
       const { error } = await supabase
-        .from('live_classes')
+        .from("live_classes")
         .delete()
-        .eq('id', recording.id);
+        .eq("id", recording.id);
 
       if (error) throw error;
 
-      toast.success('Recording deleted.');
+      toast.success("Recording deleted.");
       await fetchData();
     } catch (error) {
-      console.error('Delete recording error:', error);
+      console.error("Delete recording error:", error);
       toast.error(
-        error instanceof Error ? error.message : 'Could not delete recording.'
+        error instanceof Error ? error.message : "Could not delete recording.",
       );
     } finally {
       setDeletingId(null);
     }
   };
 
-  if (loading || !user || profile?.role !== 'admin') {
+  if (loading || !user || profile?.role !== "admin") {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
@@ -459,9 +517,7 @@ export default function AdminCourseContentPage() {
 
         {/* Content hierarchy */}
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900">
-            1. Select course
-          </h2>
+          <h2 className="text-lg font-bold text-slate-900">1. Select course</h2>
           <p className="mt-1 text-sm text-slate-500">
             Subjects and chapters belong to a specific course.
           </p>
@@ -478,8 +534,8 @@ export default function AdminCourseContentPage() {
               value={courseId}
               onChange={(event) => {
                 setCourseId(event.target.value);
-                setSubjectId('');
-                setChapterId('');
+                setSubjectId("");
+                setChapterId("");
               }}
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
@@ -558,12 +614,12 @@ export default function AdminCourseContentPage() {
                   key={subject.id}
                   onClick={() => {
                     setSubjectId(subject.id);
-                    setChapterId('');
+                    setChapterId("");
                   }}
                   className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${
                     subjectId === subject.id
-                      ? 'border-violet-400 bg-violet-50'
-                      : 'border-slate-200 hover:bg-slate-50'
+                      ? "border-violet-400 bg-violet-50"
+                      : "border-slate-200 hover:bg-slate-50"
                   }`}
                 >
                   <span>
@@ -577,7 +633,7 @@ export default function AdminCourseContentPage() {
                     )}
                   </span>
                   <span className="text-xs font-medium text-violet-700">
-                    {subjectId === subject.id ? 'Selected' : 'Select'}
+                    {subjectId === subject.id ? "Selected" : "Select"}
                   </span>
                 </button>
               ))}
@@ -655,8 +711,8 @@ export default function AdminCourseContentPage() {
                   onClick={() => setChapterId(chapter.id)}
                   className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${
                     chapterId === chapter.id
-                      ? 'border-emerald-400 bg-emerald-50'
-                      : 'border-slate-200 hover:bg-slate-50'
+                      ? "border-emerald-400 bg-emerald-50"
+                      : "border-slate-200 hover:bg-slate-50"
                   }`}
                 >
                   <span>
@@ -670,7 +726,7 @@ export default function AdminCourseContentPage() {
                     )}
                   </span>
                   <span className="text-xs font-medium text-emerald-700">
-                    {chapterId === chapter.id ? 'Selected' : 'Select'}
+                    {chapterId === chapter.id ? "Selected" : "Select"}
                   </span>
                 </button>
               ))}
@@ -701,7 +757,7 @@ export default function AdminCourseContentPage() {
                 4. Upload recorded class
               </h2>
               <p className="text-sm text-slate-600">
-                The video will be assigned to the selected chapter.
+                The video is saved to the existing recording library and linked to a teacher lecture for revenue-share tracking.
               </p>
             </div>
           </div>
@@ -710,7 +766,7 @@ export default function AdminCourseContentPage() {
             <div>
               <p className="text-xs text-slate-500">Course</p>
               <p className="mt-1 font-semibold text-slate-800">
-                {selectedCourse?.title || 'Not selected'}
+                {selectedCourse?.title || "Not selected"}
               </p>
             </div>
             <div>
@@ -765,10 +821,66 @@ export default function AdminCourseContentPage() {
               </p>
               {videoFile && (
                 <p className="mt-1 break-all text-xs text-slate-600">
-                  {videoFile.name} ·{' '}
+                  {videoFile.name} ·{" "}
                   {(videoFile.size / (1024 * 1024)).toFixed(1)} MB
                 </p>
               )}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div>
+              <label htmlFor="lecture-teacher" className="mb-2 block text-sm font-semibold text-slate-700">
+                Assigned teacher
+              </label>
+              <select
+                id="lecture-teacher"
+                value={effectiveTeacherId}
+                onChange={(event) => setAssignedTeacherId(event.target.value)}
+                required
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+              >
+                <option value="">Choose teacher</option>
+                {teachers.map((teacher) => (
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.full_name} ({teacher.email})
+                  </option>
+                ))}
+              </select>
+              {teachers.length === 0 && (
+                <p className="mt-1 text-xs text-amber-700">No teacher profiles found. Create/assign a teacher profile first.</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="lecture-duration" className="mb-2 block text-sm font-semibold text-slate-700">
+                Duration (minutes)
+              </label>
+              <input
+                id="lecture-duration"
+                type="number"
+                min={1}
+                max={1440}
+                step={1}
+                required
+                value={durationMinutes}
+                onChange={(event) => setDurationMinutes(event.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex items-center rounded-xl border border-slate-200 bg-white p-3">
+              <input
+                id="lecture-earning-eligible"
+                type="checkbox"
+                checked={earningEligible}
+                onChange={(event) => setEarningEligible(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="lecture-earning-eligible" className="ml-3 text-sm text-slate-700">
+                <span className="block font-semibold">Eligible for teacher share</span>
+                <span className="block text-xs text-slate-500">Leave unchecked for demos/promos.</span>
+              </label>
             </div>
           </div>
 
@@ -793,7 +905,7 @@ export default function AdminCourseContentPage() {
             type="button"
             onClick={() => void handleUploadVideo()}
             disabled={
-              uploading || !courseId || !subjectId || !chapterId || !videoFile
+              uploading || !courseId || !subjectId || !chapterId || !videoFile || !effectiveTeacherId || teachers.length === 0
             }
             className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -851,12 +963,12 @@ export default function AdminCourseContentPage() {
                       {recording.title}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {getCourseTitle(recording.course_id)} /{' '}
-                      {getSubjectName(recording.subject_id)} /{' '}
+                      {getCourseTitle(recording.course_id)} /{" "}
+                      {getSubjectName(recording.subject_id)} /{" "}
                       {getChapterTitle(recording.chapter_id)}
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
-                      Added{' '}
+                      Added{" "}
                       {new Date(recording.created_at).toLocaleDateString()}
                     </p>
                   </div>

@@ -112,6 +112,34 @@ export default function RegisterPage() {
         return;
       }
 
+      // Claim the referral for a newly registered student when Supabase
+      // creates an authenticated session immediately.
+      // If email verification is enabled and no session is returned, the
+      // student can claim the referral after signing in via the login flow.
+      if (selectedRole === "student" && data.session?.access_token) {
+        try {
+          const referralResponse = await fetch("/api/referrals/claim", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${data.session.access_token}`,
+            },
+            credentials: "same-origin",
+            cache: "no-store",
+          });
+
+          const referralResult = await referralResponse.json().catch(() => null);
+
+          if (!referralResponse.ok) {
+            console.error("Referral claim failed:", referralResult);
+          } else {
+            console.log("Referral claim response:", referralResult);
+          }
+        } catch (referralError) {
+          // Do not block account creation if the referral request fails.
+          console.error("Referral claim request failed:", referralError);
+        }
+      }
+
       if (isStudentApp) {
         if (data.session) {
           toast.success("Account created! Welcome to LearnPathshala.");

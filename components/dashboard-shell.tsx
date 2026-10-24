@@ -24,6 +24,7 @@ import {
   Newspaper,
   Bell,
   GraduationCap,
+   Wallet, Landmark, Banknote,IndianRupee
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -49,7 +50,33 @@ const navItems: Record<
     { label: 'Current Affairs', href: '/dashboard/admin/current-affairs', icon: Newspaper },
     { label: 'Previous Year Papers', href: '/dashboard/admin/previous-year-papers', icon: FileText },
     { label: 'Payment Settings', href: '/dashboard/admin/payment-settings', icon: CreditCard },
+    {
+  label: "Sales & Earnings",
+  href: "/dashboard/admin/sales",
+  icon: IndianRupee,
+},
+  {
+  label: "Expense",
+  href: "/dashboard/admin/expenses",
+  icon: IndianRupee,
+},
+  {
+  label: "Profit&Loss",
+  href: "/dashboard/admin/profit-loss",
+  icon: IndianRupee,
+},
     { label: 'Analytics', href: '/dashboard/admin/analytics', icon: BarChart3 },
+    { label: 'Teacher Withdrawals', href: '/dashboard/admin/teacher-withdrawals', icon: Banknote },
+    {
+  label: "Teacher Earnings",
+  href: "/dashboard/admin/teacher-earnings",
+  icon: IndianRupee,
+},
+ {
+  label: "Referral ",
+  href: "/dashboard/admin/referrals",
+  icon: IndianRupee,
+}
   ],
 
   teacher: [
@@ -58,6 +85,26 @@ const navItems: Record<
     { label: 'Live Classes', href: '/dashboard/teacher/live-classes', icon: Video },
     { label: 'Mock Tests', href: '/dashboard/teacher/mock-tests', icon: ClipboardCheck },
     { label: 'Quizzes', href: '/dashboard/teacher/quizzes', icon: Brain },
+    {
+  label: 'Earnings',
+  href: '/dashboard/teacher/earnings',
+  icon: Wallet,
+},
+{
+  label: 'Bank Accounts',
+  href: '/dashboard/teacher/bank-accounts',
+  icon: Landmark,
+},
+{
+  label: 'Withdrawals',
+  href: '/dashboard/teacher/withdrawals',
+  icon: Banknote,
+},
+ {
+  label: 'Refferrals',
+  href: '/dashboard/teacher/referrals',
+  icon: Wallet,
+ }
   ],
 
   student: [
