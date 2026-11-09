@@ -1,9 +1,13 @@
+
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import Script from 'next/script';
+
 import { AuthProvider } from '@/lib/auth-context';
 import { Toaster } from '@/components/ui/sonner';
 import { createSEO, SITE_URL, SITE_NAME } from "@/lib/seo";
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
@@ -51,10 +55,21 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
+
+        {/* Google AdSense Verification */}
+        <Script
+          id="google-adsense"
+          async
+          strategy="afterInteractive"
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8939787110995517"
+          crossOrigin="anonymous"
+        />
+
         <AuthProvider>
           {children}
           <Toaster />
         </AuthProvider>
+
       </body>
     </html>
   );
