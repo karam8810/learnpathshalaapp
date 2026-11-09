@@ -80,6 +80,10 @@ const legalLinks = [
     label: "Refund / Cancellation",
     href: "/refund-cancellation",
   },
+  {
+  label: "Disclaimer",
+  href: "/disclaimer",
+},
 ];
 
 /* =========================================================
