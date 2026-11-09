@@ -57,13 +57,12 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
 
         {/* Google AdSense Verification */}
-        <Script
-          id="google-adsense"
-          async
-          strategy="afterInteractive"
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8939787110995517"
-          crossOrigin="anonymous"
-        />
+       <Script
+  id="google-adsense"
+  strategy="beforeInteractive"
+  src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8939787110995517"
+  crossOrigin="anonymous"
+/>
 
         <AuthProvider>
           {children}
