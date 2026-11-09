@@ -2,7 +2,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import Script from 'next/script';
 
 import { AuthProvider } from '@/lib/auth-context';
 import { Toaster } from '@/components/ui/sonner';
@@ -36,6 +35,11 @@ export const metadata: Metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
 
+  // Google AdSense verification
+  other: {
+    "google-adsense-account": "ca-pub-8939787110995517",
+  },
+
   openGraph: {
     ...createSEO({
       title: "LearnPathshala - Learn. Practice. Succeed.",
@@ -55,20 +59,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
-
-        {/* Google AdSense Verification */}
-       <Script
-  id="google-adsense"
-  strategy="beforeInteractive"
-  src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8939787110995517"
-  crossOrigin="anonymous"
-/>
-
         <AuthProvider>
           {children}
           <Toaster />
         </AuthProvider>
-
       </body>
     </html>
   );
