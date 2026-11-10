@@ -5,9 +5,14 @@ const config: CapacitorConfig = {
   appId: "com.learnpathshala.app",
   appName: "LearnPathshala",
   webDir: "public",
+
   server: {
-    url: "https://learnpathshala.com/mobileapp/student",
+    url: "https://www.learnpathshala.com/mobileapp/student",
     cleartext: false,
+    allowNavigation: [
+      "www.learnpathshala.com",
+      "learnpathshala.com"
+    ],
   },
 };
 
