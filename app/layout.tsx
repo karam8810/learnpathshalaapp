@@ -61,7 +61,7 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
         <AuthProvider>
           {/* Handles Android Google OAuth deep links */}
-          <NativeOAuthHandler />
+          {/* <NativeOAuthHandler /> */}
 
           {children}
 
