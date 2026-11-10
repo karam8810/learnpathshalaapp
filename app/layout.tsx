@@ -5,7 +5,7 @@ import { Inter } from 'next/font/google';
 
 import { AuthProvider } from '@/lib/auth-context';
 import { Toaster } from '@/components/ui/sonner';
-import NativeOAuthHandler from '@/components/auth/NativeOAuthHandler';
+
 import { createSEO, SITE_URL, SITE_NAME } from '@/lib/seo';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -61,7 +61,7 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
         <AuthProvider>
           {/* Handles Android Google OAuth deep links */}
-          {/* <NativeOAuthHandler /> */}
+         
 
           {children}
 
