@@ -5,7 +5,8 @@ import { Inter } from 'next/font/google';
 
 import { AuthProvider } from '@/lib/auth-context';
 import { Toaster } from '@/components/ui/sonner';
-import { createSEO, SITE_URL, SITE_NAME } from "@/lib/seo";
+import NativeOAuthHandler from '@/components/auth/NativeOAuthHandler';
+import { createSEO, SITE_URL, SITE_NAME } from '@/lib/seo';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -35,7 +36,6 @@ export const metadata: Metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
 
-  // Google AdSense verification
   other: {
     "google-adsense-account": "ca-pub-8939787110995517",
   },
@@ -60,7 +60,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
         <AuthProvider>
+          {/* Handles Android Google OAuth deep links */}
+          <NativeOAuthHandler />
+
           {children}
+
           <Toaster />
         </AuthProvider>
       </body>

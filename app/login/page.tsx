@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase/client";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
 
 function GoogleIcon() {
   return (
@@ -171,46 +173,57 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setLoading(true);
 
-    try {
-      const callbackUrl = new URL(
-        "/auth/callback",
-        window.location.origin
-      );
+const handleGoogleLogin = async () => {
+  setLoading(true);
 
-      if (isStudentApp) {
-        callbackUrl.searchParams.set("app", "student");
-      }
+  try {
+    const isNative = Capacitor.isNativePlatform();
 
-      const safeRedirect = getSafeRedirect();
+    const callbackUrl = isNative
+      ? "com.learnpathshala.app://login-callback"
+      : new URL("/auth/callback", window.location.origin).toString();
 
-      if (safeRedirect) {
-        callbackUrl.searchParams.set("redirect", safeRedirect);
-      }
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: callbackUrl.toString(),
-          queryParams: {
-            prompt: "select_account",
-          },
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: callbackUrl,
+        skipBrowserRedirect: isNative,
+        queryParams: {
+          prompt: "select_account",
         },
+      },
+    });
+
+    if (error) throw error;
+
+    if (isNative) {
+      if (!data.url) {
+        throw new Error("Google authentication URL not generated.");
+      }
+
+      await Browser.open({
+        url: data.url,
+        presentationStyle: "fullscreen",
       });
 
-      if (error) {
-        toast.error(error.message);
-        setLoading(false);
-      }
-      // On success, the browser redirects to Google.
-    } catch (error) {
-      console.error("Google sign-in error:", error);
-      toast.error("Unable to start Google sign-in.");
-      setLoading(false);
+      return;
     }
-  };
+
+    // Website login redirects automatically.
+  } catch (error) {
+    console.error("Google login error:", error);
+
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : "Unable to start Google login."
+    );
+
+    setLoading(false);
+  }
+};
+
 
   const registerHref = isStudentApp
     ? "/register?app=student"
