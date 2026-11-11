@@ -28,6 +28,8 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import Link from 'next/link';
+import { Trash2 } from 'lucide-react';
 
 type Enrollment = {
   id: string;
@@ -396,6 +398,15 @@ export default function StudentProfilePage() {
                 {loggingOut ? 'Logging out...' : 'Logout'}
               </Button>
             </div>
+            <div className="mt-3">
+  <Link
+    href="/delete-account"
+    className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+  >
+    <Trash2 className="h-4 w-4" />
+    Delete Account
+  </Link>
+</div>
           </CardContent>
         </Card>
       </div>

@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase/client';
-
+import Link from 'next/link';
+import { Trash2 } from 'lucide-react';
 export default function AdminUsersPage() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
@@ -75,6 +76,13 @@ export default function AdminUsersPage() {
   return (
     <DashboardShell role="admin">
       <div className="mb-6">
+        <Link
+  href="/dashboard/admin/deletion-requests"
+  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+>
+  <Trash2 className="h-4 w-4" />
+  Deletion Requests
+</Link>
         <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
         <p className="text-sm text-slate-500">View and manage all platform users</p>
       </div>
